@@ -32,8 +32,7 @@ class AntiFraud(object):
                                 idx : [idy, idz, ...]
                             }
 
-            The dictionary (a hash map because of its constant complexity) will save each id as a key and it will have
-            a set(so that ids are not repeated) with all the adjacent ids.
+            The dictionary will save each id as a key and it will have a set with all the adjacent ids as a value.
 
         """
         with open(self.batch_payment) as f:
