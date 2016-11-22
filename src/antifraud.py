@@ -6,6 +6,7 @@ class AntiFraud(object):
     def __init__(self):
         self.batch_payment = '../paymo_input/batch_payment.txt'
         self.stream_payment = '../paymo_input/stream_payment.txt'
+        self.output_file = 'paymo_output/output.txt'
         self.id_graph = {}
 
     def create_graph(self):
@@ -119,13 +120,8 @@ class AntiFraud(object):
         print("graph creation " + str(end1 - start1))
 
         # Feature 1: save file with 1 level of separation (adjacent nodes)
-        self.write_to_txt("../paymo_output/output_1.txt", 1) # this looks ugly, it should be a var
+        self.write_to_txt(self.output_file, 1) 
 
-        # Feature 2: save file with 2 level of separation (adjacent nodes)
-        self.write_to_txt("../paymo_output/output_2.txt", 2) # this looks ugly, it should be a var
-
-        # Feature 3: save file with 4 level of separation (adjacent nodes)
-        self.write_to_txt("../paymo_output/output_3.txt", 4) # this looks ugly, it should be a var
 
 if __name__ == "__main__":
     AntiFraud().main()
