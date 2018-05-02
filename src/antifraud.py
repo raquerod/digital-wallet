@@ -33,9 +33,9 @@ class AntiFraud():
         """
 
         graph = defaultdict(set)
-        r = requests.get(url, stream=True)
+        r = requests.get(url)
 
-        for i, line in enumerate(r.iter_lines()):
+        for line r.iter_lines():
             decoded_line = line.decode('utf-8').strip().split(',')
             if len(decoded_line) == 5:
                 if decoded_line[1] not in graph:
