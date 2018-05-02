@@ -1,15 +1,12 @@
-from timeit import default_timer as timer
+import requests
+from collections import defaultdict
 
 
-class AntiFraud(object):
+class AntiFraud():
 
-    def __init__(self):
-        self.batch_payment = '../paymo_input/batch_payment.txt'
-        self.stream_payment = '../paymo_input/stream_payment.txt'
-        self.output_file = 'paymo_output/output.txt'
-        self.id_graph = {}
+    @staticmethod
+    def create_graph(url):
 
-    def create_graph(self):
         """
             Example graph:
               _____         _____
@@ -24,107 +21,80 @@ class AntiFraud(object):
             This method returns a graph structure that looks like this:
 
                 id_graph = {
-                                id2 : [id1, id3]
-                                id1 : [id6, id2]
-                                id6 : [id1]
-                                id3 : [id2, id4]
-                                id4 : [id3]
+                                id2 : {id1, id3}
+                                id1 : {id6, id2}
+                                id6 : {id1}
+                                id3 : {id2, id4}
+                                id4 : {id3}
                                 .....
-                                idx : [idy, idz, ...]
+                                idx : {idy, idz, ...}
                             }
 
-            The dictionary will save each id as a key and it will have a set with all the adjacent ids as a value.
-
         """
-        with open(self.batch_payment) as f:
-            next(f)  # ignores header
-            for trans in f:
-                trans_list = trans.split(',')  # trans_list[1] has the first id, trans_list[2] has the second id
 
-                if trans_list[1] in self.id_graph:
-                    self.id_graph.get(trans_list[1]).add(trans_list[2])
+        graph = defaultdict(set)
+        r = requests.get(url, stream=True)
+
+        for i, line in enumerate(r.iter_lines()):
+            decoded_line = line.decode('utf-8').strip().split(',')
+            if len(decoded_line) == 5:
+                if decoded_line[1] not in graph:
+                    graph[decoded_line[1]] = {(decoded_line[2])}
                 else:
-                    self.id_graph.update({trans_list[1]: {trans_list[2]}})
+                    graph[decoded_line[1]].add(decoded_line[2])
 
-                if trans_list[2] in self.id_graph:
-                    self.id_graph.get(trans_list[2]).add(trans_list[1])
+                if decoded_line[2] not in graph:
+                    graph[decoded_line[2]] = {decoded_line[1]}
                 else:
-                    self.id_graph.update({trans_list[2]: {trans_list[1]}})
+                    graph[decoded_line[2]].add(decoded_line[1])
 
-    def fraud_detection(self, degree):
-        """ This func finds if every user in the txt is connected or not depending on the degree of separation the users
-            of the application want """
-        result_list=[]
-        with open(self.stream_payment) as f:
-            next(f)
-            for trans in f:
-                trans_list = trans.split(',')  # trans_list[1] has the first id, trans_list[2] has the second id
-                if len(trans_list) == 5 and self.id_graph.get(trans_list[1]):  # if the user giving the money exists in the graph and the line is correct
-                    if self.are_connected(degree, trans_list[1], trans_list[2]):
-                        result_list.append("trusted")
-                    else:
-                        result_list.append("unverified")
+        return graph
+
+    @staticmethod
+    def classify_simple(graph, url, max_lines):
+        r = requests.get(url, stream=True)
+        for i, line in enumerate(r.iter_lines()):
+            if line and i < max_lines:
+                decoded_line = [i.strip() for i in line.decode('utf-8').split(',').strip()]
+                if decoded_line[2] in graph[decoded_line[1]]:
+                    print(decoded_line[2] + ' in ' + decoded_line[1])
+                    print('trusted')
+
                 else:
-                    result_list.append("unverified")  # this user has never made a transaction, so any transaction will be untrusted,
-                                          # should I add it to the graph?
-        return result_list
-    def are_connected(self, degree, id1, id2):
-        """
-            This func returns true if the two users have the specified degree of separation or less
-            and false if they don't.
+                    print(decoded_line[2], decoded_line[1])
+                    print('untrusted')
 
-            It will have a queue with all the adjacent nodes connected to the node performing the transaction (id1),
-            if the node we are looking for (id2) is not in this list it will the func new_queue
-            that gets all nodes from the next level in a new list.
+            else:
+                break
 
-        """
-        if self.id_graph.get(id1):
-            queue = self.id_graph.get(id1)
-            depth = 0
-            while depth < degree:
-                if id2 in queue:
-                    return True
+    @staticmethod
+    def bfs(graph, nodes, end, n, l=0, ans=False):
+        while not ans and l <= n:
+            # print(nodes, end)
+            if end in nodes:
+                return True
+            else:
+                l += 1
+                new_nodes = set()
+                for i in nodes:
+                    new_nodes.update(graph[i])
+                ans = bfs(graph, new_nodes, end, n, l, ans)
+
+        return ans
+
+    @staticmethod
+    def classify_bfs(graph, url, nth_degree, max_lines):
+        r = requests.get(url, stream=True)
+        for i, line in enumerate(r.iter_lines()):
+            if line and i < max_lines:
+                decoded_line = [i.strip() for i in line.decode('utf-8').split(',')]
+                if bfs(graph, [decoded_line[1]], decoded_line[2], nth_degree):
+                    print(decoded_line[2] + ' in ' + decoded_line[1])
+                    print('trusted')
+
                 else:
-                    depth += 1
-                    if depth < degree:  # Don't do extra work
-                        queue = self.new_queue(queue)
+                    print(decoded_line[2] + ' in ' + decoded_line[1])
+                    print('untrusted')
 
-        return False
-
-    def new_queue(self, queue):
-        """ This will create a new queue for the next degree """
-
-        new_queue = set()
-        for id1 in queue:
-            if self.id_graph.get(id1):
-                new_queue.update(self.id_graph.get(id1))
-        return new_queue
-
-    def write_to_txt(self, file_name, degree):
-        """ This will write the generator to an output file """
-        start = timer()
-        g = self.fraud_detection(degree)
-        end = timer()
-        print("Feature completed " + str(end - start))
-        with open(file_name, 'w') as f:
-            for x in g:
-                f.write(str(x)+"\n")
-        print("Finished writing to file")
-
-    def main(self):
-
-        # Creates the original graph, in a real life scenario this won't run when reading from a stream
-        start1 = timer()
-        self.create_graph()
-        end1 = timer()
-        print("graph creation " + str(end1 - start1))
-
-        # Feature 1: save file with 1 level of separation (adjacent nodes)
-        self.write_to_txt(self.output_file, 1) 
-
-
-if __name__ == "__main__":
-    AntiFraud().main()
-
-
-
+            else:
+                break
