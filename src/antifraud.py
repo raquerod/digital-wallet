@@ -55,7 +55,7 @@ class AntiFraud():
         r = requests.get(url, stream=True)
         for i, line in enumerate(r.iter_lines()):
             if line and i < max_lines:
-                decoded_line = [i.strip() for i in line.decode('utf-8').split(',').strip()]
+                decoded_line = [i.strip() for i in line.decode('utf-8').split(',')]
                 if decoded_line[2] in graph[decoded_line[1]]:
                     print(decoded_line[2] + ' in ' + decoded_line[1])
                     print('trusted')
